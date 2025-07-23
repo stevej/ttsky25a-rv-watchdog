@@ -9,7 +9,7 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## What it does
 
-Explain what your peripheral does and how it works
+This is a watchdog timer with a 32-bit resolution window.
 
 ## Register map
 
@@ -17,12 +17,17 @@ Document the registers that are used to interact with your peripheral
 
 | Address | Name  | Access | Description                                                         |
 |---------|-------|--------|---------------------------------------------------------------------|
-| 0x00    | DATA  | R/W    | A word of data                                                      |
+| 0x00    | ENABLE  | R/W    | 1=Enable, 0=Disable. Enables or disables the watchdog             |
+| 0x01    | WINDOW_START | R/W | How many cycles until the window opens                          |
+| 0x02    | WINDOW_CLOSE | R/W | How many cycles until the window closes                         |
+| 0x03    | WATCHDOG_PAT | W  | "Pat" the watchdog, restarting the watch window                 
 
 ## How to test
 
-Explain how to use your project
+Positive test: Set a window, then pat it within the window. No interrupt lines should be high or low.
+Negative test: Set a window, allow it to expire. The two interrupt lines should be driven high and low respectively.
+
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+None required.

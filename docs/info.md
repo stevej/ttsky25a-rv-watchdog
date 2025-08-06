@@ -9,24 +9,36 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## What it does
 
-This is a watchdog timer with a 32-bit resolution window.
+This is a watchdog timer with a 32-bit counter and optional window feature.
+
+WINDOW_CLOSE is how many cycles until the watchdog timer pulls the output interrupt high either low or high respectively. WINDOW_OPEN < WINDOW_CLOSE. WINDOW_OPEN can be 0.
+
+Remember to ENABLE the timer after setting WINDOW_CLOSE if you want the watchdog to start working.
+
+out[0] is an interrupt line pulled high 
+out[1] is an interrupt line pulled low
+out[2] is a line pulled high for 1 cycle when PAT is set 1
 
 ## Register map
 
-Document the registers that are used to interact with your peripheral
+The following registers are used to interact with the watchdog
 
-| Address | Name  | Access | Description                                                         |
-|---------|-------|--------|---------------------------------------------------------------------|
-| 0x00    | ENABLE  | R/W    | 1=Enable, 0=Disable. Enables or disables the watchdog             |
-| 0x01    | WINDOW_START | R/W | How many cycles until the window opens                          |
-| 0x02    | WINDOW_CLOSE | R/W | How many cycles until the window closes                         |
-| 0x03    | WATCHDOG_PAT | W  | "Pat" the watchdog, restarting the watch window                 
+| Address | Name    | Access | Description                                                         |
+|---------|---------|--------|---------------------------------------------------------------------|
+| 0x00    | ENABLE  | R/W    | 1 = Enable, 0 = Disable.
+| 0x01    | WINDOW_START | R/W    | 32-bit value for how many cycles after reset the watchdog window should open                    |
+| 0x02    | WINDOW_CLOSE    | R/W      | 32-bit value for how many cycles after reset the watchdog window should close |
+| 0x03    | PAT | R/W   | 1=Pat. 0=Undefined "Patting" the watchdog timer causes it to reset the timer.
+
+
 
 ## How to test
 
-Positive test: Set a window, then pat it within the window. No interrupt lines should be high or low.
-Negative test: Set a window, allow it to expire. The two interrupt lines should be driven high and low respectively.
-
+Set WINDOW_CLOSE to 100
+Set ENABLE to 1
+Wait 100 cycles
+out[0] should be high until reset
+out[1] should be low until reset
 
 ## External hardware
 

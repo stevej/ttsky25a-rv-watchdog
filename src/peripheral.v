@@ -32,51 +32,91 @@ module tqvp_stevej_watchdog (
 );
 
     // Implement a 32-bit read/write register at address 0
-    reg [31:0] example_data;
+    reg [31:0] window_start;
+    reg [31:0] window_close;
+    reg watchdog_enabled; // has the user enabled the design
+    reg pat; // has the user patted the watchdog this window?
+
     always @(posedge clk) begin
         if (!rst_n) begin
-            example_data <= 0;
+            window_start <= 32'b0;
+            window_close <= 32'b0;
+            watchdog_enabled <= 1'b0;
+            pat <= 1'b0;
         end else begin
-            if (address == 6'h0) begin
-                if (data_write_n != 2'b11)              example_data[7:0]   <= data_in[7:0];
-                if (data_write_n[1] != data_write_n[0]) example_data[15:8]  <= data_in[15:8];
-                if (data_write_n == 2'b10)              example_data[31:16] <= data_in[31:16];
+            if (address == 6'h0) begin // Address 0 is ENABLE
+                if (data_write_n != 2'b11) watchdog_enabled <= data_in[0];
             end
+
+            if (!timer_expired) begin
+                timer <= timer + 1;
+            end else if (data_in[0]) begin
+                // the watchdog is being patted so reset the timer.
+                timer <= 0;
+                // register output that we've seen a pat.
+                saw_pat <= 1;
+            end else if (!data_in[0]) begin
+                saw_pat <= 0;
+            end
+
         end
     end
+    reg [31:0] example_data;
+    wire timer_expired;
+    reg [31:0] timer;
 
-    // The bottom 8 bits of the stored data are added to ui_in and output to uo_out.
-    assign uo_out = example_data[7:0] + ui_in;
+    wire interrupt_high; // destination is an output pin, driving high means the window was missed.
+    wire interrupt_low; // destination is an output pin, driving low means the window was missed.
+    reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
 
-    // Address 0 reads the example data register.  
-    // Address 4 reads ui_in
-    // All other addresses read 0.
-    assign data_out = (address == 6'h0) ? example_data :
-                      (address == 6'h4) ? {24'h0, ui_in} :
-                      32'h0;
+    assign timer_expired = watchdog_enabled && (timer > window_close && timer > window_start);
+    assign interrupt_high = timer_expired;
+    assign interrupt_low = !timer_expired;
+    assign user_interrupt = interrupt_high;
+    assign uo_out = {interrupt_high, interrupt_low, saw_pat, 5'b0_0000};
+
+    // Unused
+    assign data_out = 32'h0;
 
     // All reads complete in 1 clock
     assign data_ready = 1;
     
     // User interrupt is generated on rising edge of ui_in[6], and cleared by writing a 1 to the low bit of address 8.
-    reg example_interrupt;
+    //reg example_interrupt;
     reg last_ui_in_6;
 
-    always @(posedge clk) begin
-        if (!rst_n) begin
-            example_interrupt <= 0;
-        end
+`ifdef FORMAL
+    logic f_past_valid;
 
-        if (ui_in[6] && !last_ui_in_6) begin
-            example_interrupt <= 1;
-        end else if (address == 6'h8 && data_write_n != 2'b11 && data_in[0]) begin
-            example_interrupt <= 0;
-        end
-
-        last_ui_in_6 <= ui_in[6];
+    initial begin
+      f_past_valid = 1'b0;
     end
 
-    assign user_interrupt = example_interrupt;
+    always @(posedge clk) begin
+        if (!f_past_valid) begin
+            assume (!rst_n);
+        end
+
+        f_past_valid <= 1'b1;
+    end
+
+
+    always @(posedge clk) begin
+        if (f_past_valid) begin
+            // the timer can only expire if the watchdog is enabled
+            if (timer_expired) begin
+                assert (watchdog_enabled);
+            end
+
+            // the interrupt can only be pulled high by the timer expiring
+            if (interrupt_high) begin
+                assert (timer_expired);
+                assert (watchdog_enabled);
+            end
+        end
+     end
+`endif // FORMAL
+
 
     // List all unused inputs to prevent warnings
     // data_read_n is unused as none of our behaviour depends on whether

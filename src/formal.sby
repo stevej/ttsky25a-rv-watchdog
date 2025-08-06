@@ -1,0 +1,30 @@
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 20
+prove: mode prove
+cover: mode cover
+cover: append 10
+bmc: multiclock on
+
+[engines]
+bmc: smtbmc
+prove: smtbmc
+cover: smtbmc z3
+
+[script]
+read -formal peripheral.v
+prep -top tqvp_stevej_watchdog 
+memory_map -rom-only
+# use this to help track down PREUNSAT, only works on a single module at a time.
+# hierarchy -check; proc; opt
+# sat -prove-asserts -set-assumes
+
+[files]
+peripheral.v
+tt_wrapper.v
+

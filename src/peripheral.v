@@ -43,24 +43,37 @@ module tqvp_stevej_watchdog (
             window_close <= 32'b0;
             watchdog_enabled <= 1'b0;
             pat <= 1'b0;
+            saw_pat <= 1'b0;
+            timer <= 0;
         end else begin
             if (address == 6'h0) begin // Address 0 is ENABLE
                 if (data_write_n != 2'b11) watchdog_enabled <= data_in[0];
             end
 
+            if (address == 6'h1) begin // Address 1 is WINDOW_START
+                if (data_write_n != 2'b11) window_start <= data_in;
+            end
+
+            if (address == 6'h2) begin // Address 2 is WINDOW_CLOSE
+                if (data_write_n != 2'b11) window_close <= data_in;
+            end
+
+            if (address == 6'h3) begin // Address 3 is PAT
+                if (data_write_n != 2'b11) begin
+                    saw_pat <= 1;
+                    timer <= 0;
+                end
+            end else begin
+                saw_pat <= 0;
+            end
+
             if (!timer_expired) begin
                 timer <= timer + 1;
-            end else if (data_in[0]) begin
-                // the watchdog is being patted so reset the timer.
-                timer <= 0;
-                // register output that we've seen a pat.
-                saw_pat <= 1;
-            end else if (!data_in[0]) begin
-                saw_pat <= 0;
             end
 
         end
     end
+
     reg [31:0] example_data;
     wire timer_expired;
     reg [31:0] timer;
@@ -73,10 +86,21 @@ module tqvp_stevej_watchdog (
     assign interrupt_high = timer_expired;
     assign interrupt_low = !timer_expired;
     assign user_interrupt = interrupt_high;
-    assign uo_out = {interrupt_high, interrupt_low, saw_pat, 5'b0_0000};
+    assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, 4'b0000};
 
-    // Unused
-    assign data_out = 32'h0;
+    // Addresses
+    // 0x0: Enabled
+    // 0x1: WINDOW_OPEN
+    // 0x2: WINDOW_CLOSE
+    // 0x3: PAT
+    // 0x4: reflects ui_in
+    // Default: 0
+    assign data_out = (address == 6'h0) ? {31'h0, watchdog_enabled} :
+                      (address == 6'h1) ? window_start :
+                      (address == 6'h2) ? window_close :
+                      (address == 6'h3) ? {31'h0, saw_pat} :
+                      (address == 6'h4) ? {24'h0, ui_in} :
+                      32'h0;
 
     // All reads complete in 1 clock
     assign data_ready = 1;
@@ -99,7 +123,6 @@ module tqvp_stevej_watchdog (
 
         f_past_valid <= 1'b1;
     end
-
 
     always @(posedge clk) begin
         if (f_past_valid) begin

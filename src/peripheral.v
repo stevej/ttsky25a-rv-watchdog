@@ -82,11 +82,15 @@ module tqvp_stevej_watchdog (
     wire interrupt_low; // destination is an output pin, driving low means the window was missed.
     reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
 
-    assign timer_expired = watchdog_enabled && (timer > window_close && timer > window_start);
+    wire after_window_start;
+    assign after_window_start = timer > window_start;
+    wire after_window_close;
+    assign after_window_close = timer > window_close;
+    assign timer_expired = watchdog_enabled && after_window_start && after_window_close;
     assign interrupt_high = timer_expired;
     assign interrupt_low = !timer_expired;
     assign user_interrupt = interrupt_high;
-    assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, 4'b0000};
+    assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
 
     // Addresses
     // 0x0: Enabled

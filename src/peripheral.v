@@ -31,11 +31,12 @@ module tqvp_stevej_watchdog (
     output        user_interrupt  // Dedicated interrupt request for this peripheral
 );
 
-    // Implement a 32-bit read/write register at address 0
+    reg [31:0] timer;
     reg [31:0] window_start;
     reg [31:0] window_close;
     reg watchdog_enabled; // has the user enabled the design
     reg pat; // has the user patted the watchdog this window?
+    reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -44,31 +45,38 @@ module tqvp_stevej_watchdog (
             watchdog_enabled <= 1'b0;
             pat <= 1'b0;
             saw_pat <= 1'b0;
-            timer <= 0;
+            timer <= 32'b0;
         end else begin
             if (address == 6'h0) begin // Address 0 is ENABLE
-                if (data_write_n != 2'b11) watchdog_enabled <= data_in[0];
+                if (data_write_n != 2'b11) begin
+                    watchdog_enabled <= data_in[0];
+                    timer <= 32'b0;
+                end
             end
 
             if (address == 6'h1) begin // Address 1 is WINDOW_START
-                if (data_write_n != 2'b11) window_start <= data_in;
+                if (data_write_n != 2'b11) begin
+                    window_start <= data_in;
+                end
             end
 
             if (address == 6'h2) begin // Address 2 is WINDOW_CLOSE
-                if (data_write_n != 2'b11) window_close <= data_in;
+                if (data_write_n != 2'b11) begin
+                    window_close <= data_in;
+                end
             end
 
             if (address == 6'h3) begin // Address 3 is PAT
                 if (data_write_n != 2'b11) begin
-                    saw_pat <= 1;
-                    timer <= 0;
+                    saw_pat <= 1'b1;
+                    timer <= 32'b0;
                 end
             end else begin
-                saw_pat <= 0;
+                saw_pat <= 1'b0;
             end
 
             if (!timer_expired) begin
-                timer <= timer + 1;
+                timer <= timer + 32'b1;
             end
 
         end
@@ -76,16 +84,16 @@ module tqvp_stevej_watchdog (
 
     reg [31:0] example_data;
     wire timer_expired;
-    reg [31:0] timer;
 
     wire interrupt_high; // destination is an output pin, driving high means the window was missed.
     wire interrupt_low; // destination is an output pin, driving low means the window was missed.
-    reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
 
     wire after_window_start;
     assign after_window_start = timer > window_start;
+
     wire after_window_close;
     assign after_window_close = timer > window_close;
+
     assign timer_expired = watchdog_enabled && after_window_start && after_window_close;
     assign interrupt_high = timer_expired;
     assign interrupt_low = !timer_expired;

@@ -35,7 +35,6 @@ module tqvp_stevej_watchdog (
     reg [31:0] window_start;
     reg [31:0] window_close;
     reg watchdog_enabled; // has the user enabled the design
-    reg pat; // has the user patted the watchdog this window?
     reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
 
     always @(posedge clk) begin
@@ -43,42 +42,38 @@ module tqvp_stevej_watchdog (
             window_start <= 32'b0;
             window_close <= 32'b0;
             watchdog_enabled <= 1'b0;
-            pat <= 1'b0;
             saw_pat <= 1'b0;
             timer <= 32'b0;
         end else begin
+            watchdog_enabled <= watchdog_enabled;
+            timer <= timer;
+            window_start <= window_start;
+            window_close <= window_close;
+            saw_pat <= saw_pat;
+            
             if (address == 6'h0) begin // Address 0 is ENABLE
                 if (data_write_n != 2'b11) begin
-                    watchdog_enabled <= data_in[0];
+                    watchdog_enabled <= 1;
                     timer <= 32'b0;
                 end
-            end
-
-            if (address == 6'h1) begin // Address 1 is WINDOW_START
+            end else if (address == 6'h1) begin // Address 1 is WINDOW_START
                 if (data_write_n != 2'b11) begin
                     window_start <= data_in;
                 end
-            end
-
-            if (address == 6'h2) begin // Address 2 is WINDOW_CLOSE
+            end else if (address == 6'h2) begin // Address 2 is WINDOW_CLOSE
                 if (data_write_n != 2'b11) begin
                     window_close <= data_in;
                 end
-            end
-
-            if (address == 6'h3) begin // Address 3 is PAT
+            end else if (address == 6'h3) begin // Address 3 is PAT
                 if (data_write_n != 2'b11) begin
                     saw_pat <= 1'b1;
                     timer <= 32'b0;
                 end
-            end else begin
-                saw_pat <= 1'b0;
             end
 
             if (!timer_expired) begin
                 timer <= timer + 32'b1;
             end
-
         end
     end
 
@@ -95,9 +90,11 @@ module tqvp_stevej_watchdog (
     assign after_window_close = timer > window_close;
 
     assign timer_expired = watchdog_enabled && after_window_start && after_window_close;
+
     assign interrupt_high = timer_expired;
     assign interrupt_low = !timer_expired;
     assign user_interrupt = interrupt_high;
+
     assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
 
     // Addresses

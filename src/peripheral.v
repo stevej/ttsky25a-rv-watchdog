@@ -36,6 +36,7 @@ module tqvp_stevej_watchdog (
     reg [31:0] window_close;
     reg watchdog_enabled; // has the user enabled the design
     reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
+    wire timer_expired;
 
     always @(posedge clk) begin
         if (!rst_n) begin
@@ -50,7 +51,7 @@ module tqvp_stevej_watchdog (
             window_start <= window_start;
             window_close <= window_close;
             saw_pat <= saw_pat;
-            
+
             if (address == 6'h0) begin // Address 0 is ENABLE
                 if (data_write_n != 2'b11) begin
                     watchdog_enabled <= 1;
@@ -66,19 +67,23 @@ module tqvp_stevej_watchdog (
                 end
             end else if (address == 6'h3) begin // Address 3 is PAT
                 if (data_write_n != 2'b11) begin
-                    saw_pat <= 1'b1;
-                    timer <= 32'b0;
+                    // You aren't allowed to reset a watchdog that isn't enabled
+                    if (watchdog_enabled) begin
+                        saw_pat <= 1'b1;
+                        timer <= 32'b0;
+                    end
                 end
             end
 
             if (!timer_expired) begin
                 timer <= timer + 32'b1;
-            end
+            end /* else begin // Why is this else branch cursed?
+                timer <= timer;
+            end */
         end
     end
 
     reg [31:0] example_data;
-    wire timer_expired;
 
     wire interrupt_high; // destination is an output pin, driving high means the window was missed.
     wire interrupt_low; // destination is an output pin, driving low means the window was missed.
@@ -131,6 +136,14 @@ module tqvp_stevej_watchdog (
         end
 
         f_past_valid <= 1'b1;
+    end
+
+    always @(posedge clk) begin
+        if (f_past_valid) begin
+            if (saw_pat) begin
+                assert(watchdog_enabled);
+            end
+        end
     end
 
     always @(posedge clk) begin

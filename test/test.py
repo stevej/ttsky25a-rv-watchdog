@@ -32,11 +32,108 @@ async def test_enabled_without_window(dut):
     assert await tqv.read_hword_reg(0) == 0x1
     assert await tqv.read_word_reg(0) == 0x1
 
-    await ClockCycles(dut.clk, 3)
+    await ClockCycles(dut.clk, 1)
 
     # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
     assert dut.uo_out.value == 0b1001_1100
 
+@cocotb.test()
+async def test_enabled_with_window_close_no_start(dut):
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    tqv = TinyQV(dut)
+
+    # Reset
+    await tqv.reset()
+    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+
+    # WINDOW_CLOSE is 0x19 (25 decimal) cycles. This is the minimum number of cycles a window can be due to timing.
+    await tqv.write_word_reg(2, 0x19)
+    # ENABLE watchdog
+    await tqv.write_word_reg(0, 0x1)
+    await ClockCycles(dut.clk, 1)
+
+    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+    assert dut.uo_out.value != 0b1001_1100
+
+    # The interrupt triggers the very next clock cycle
+    await ClockCycles(dut.clk, 1)
+    assert dut.uo_out.value == 0b1001_1100
+
+
+@cocotb.test()
+async def test_enabled_with_window_close_no_start_with_pat_then_expire(dut):
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    tqv = TinyQV(dut)
+
+    # Reset
+    await tqv.reset()
+    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+
+    # WINDOW_CLOSE is 0x19 (25 decimal) cycles. This is the minimum number of cycles a window can be due to timing.
+    await tqv.write_word_reg(2, 0x19)
+    # ENABLE watchdog
+    await tqv.write_word_reg(0, 0x1)
+    await ClockCycles(dut.clk, 1)
+
+    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+    assert dut.uo_out.value != 0b1001_1100
+
+    # Send Pat to reset watchdog, check that the timer hasn't expired.
+    await tqv.write_word_reg(3, 0x1) # how many cycles does this take?
+    await ClockCycles(dut.clk, 1)
+    assert dut.uo_out.value == 0b0111_1000
+
+    # Send Pat again to reset watchdog, check that timer hasn't expired.
+    await tqv.write_word_reg(3, 0x1) # how many cycles does this take?
+    await ClockCycles(dut.clk, 1)
+    assert dut.uo_out.value == 0b0111_1000
+
+    # Don't send pat, let the timer expire.
+    await ClockCycles(dut.clk, 1)
+    assert dut.uo_out.value == 0b1011_1100
+
+@cocotb.test()
+async def test_enabled_with_window_close_and_start_not_enabled(dut):
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Interact with your design's registers through this TinyQV class.
+    # This will allow the same test to be run when your design is integrated
+    # with TinyQV - the implementation of this class will be replaces with a
+    # different version that uses Risc-V instructions instead of the SPI 
+    # interface to read and write the registers.
+    tqv = TinyQV(dut)
+
+    # Reset
+    await tqv.reset()
+
+    dut._log.info("Test project behavior")
+
+    # WINDOW_START
+    await tqv.write_word_reg(1, 25)
+    # WINDOW_CLOSE
+    await tqv.write_word_reg(2, 50)
+    # ENABLE
+    await tqv.write_word_reg(0, 0x1)
+
+    # wait longer than the watchdog is set for to see if it triggers.
+    await ClockCycles(dut.clk, 25)
+
+    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+    assert dut.uo_out.value != 0b1001_1100
 
 # Test that enabling the watchdog timer with a WINDOW_CLOSE of results in a set watchdog
 @cocotb.test()
@@ -163,6 +260,7 @@ async def test_enabled_with_window_start_and_close_early_pat(dut):
 
     # immediately patting to reset the timer.
     await tqv.write_word_reg(3, 0x1)
+    assert await tqv.read_word_reg(3) == 0x1
 
 
     await ClockCycles(dut.clk, 1)
@@ -175,8 +273,52 @@ async def test_enabled_with_window_start_and_close_early_pat(dut):
     # If this assertion fails, the watchdog triggered too quickly from our perspective.
     assert dut.uo_out.value != 0b10011100
 
-    await ClockCycles(dut.clk, 0xA00)
+    await ClockCycles(dut.clk, 1)
     assert dut.uo_out.value == 0b01111000
 
     await ClockCycles(dut.clk, 0xBBB)
     assert dut.uo_out.value == 0b10111100
+
+
+# Test that enabling the watchdog timer with a WINDOW_CLOSE of 10 results in an expired timer in 10 cycles.
+@cocotb.test()
+async def test_enabled_with_window_start_and_close_no_pat(dut):
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Interact with your design's registers through this TinyQV class.
+    # This will allow the same test to be run when your design is integrated
+    # with TinyQV - the implementation of this class will be replaces with a
+    # different version that uses Risc-V instructions instead of the SPI 
+    # interface to read and write the registers.
+    tqv = TinyQV(dut)
+    # Reset
+    await tqv.reset()
+
+    dut._log.info("Test project behavior")
+    # Writing 5 to WATCHDOG_START register
+    await tqv.write_word_reg(1, 25)
+    # Writing 10 to WATCHDOG_CLOSE register
+    await tqv.write_word_reg(2, 250)
+    # Enabling watchdog timer
+    await tqv.write_word_reg(0, 0x1)
+
+    await ClockCycles(dut.clk, 1)
+    # watchdog should not have tripped after 1 cycle when configured for 0xBBB cycles
+    assert dut.uo_out.value != 0b10011100
+    assert dut.uo_out.value == 0b01010000
+
+    # The watchdog should not trigger in less cycles than configured.
+    await ClockCycles(dut.clk, 0x10)
+    # If this assertion fails, the watchdog triggered too quickly from our perspective.
+    assert dut.uo_out.value != 0b10011100
+
+    await ClockCycles(dut.clk, 0x11)
+    assert dut.uo_out.value == 0b01011000
+
+    await ClockCycles(dut.clk, 0xAAA)
+    assert dut.uo_out.value == 0b10011100
+

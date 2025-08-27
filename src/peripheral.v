@@ -75,7 +75,7 @@ module tqvp_stevej_watchdog (
                 end
             end
 
-            if (!timer_expired) begin
+            if (watchdog_enabled && !timer_expired) begin
                 timer <= timer + 32'b1;
             end /* else begin // Why is this else branch cursed?
                 timer <= timer;
@@ -89,10 +89,10 @@ module tqvp_stevej_watchdog (
     wire interrupt_low; // destination is an output pin, driving low means the window was missed.
 
     wire after_window_start;
-    assign after_window_start = timer > window_start;
+    assign after_window_start = (timer != 0) && (timer > window_start);
 
     wire after_window_close;
-    assign after_window_close = timer > window_close;
+    assign after_window_close = (timer != 0) && (timer > window_close);
 
     assign timer_expired = watchdog_enabled && after_window_start && after_window_close;
 

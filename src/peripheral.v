@@ -148,6 +148,13 @@ module tqvp_stevej_watchdog (
 
     always @(posedge clk) begin
         if (f_past_valid) begin
+            // the timer should not move if the watchdog isn't enabled
+            if (!watchdog_enabled) assert(timer == 0);
+        end
+    end
+
+    always @(posedge clk) begin
+        if (f_past_valid) begin
             // the timer can only expire if the watchdog is enabled
             if (timer_expired) begin
                 assert (watchdog_enabled);

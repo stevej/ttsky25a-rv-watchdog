@@ -7,8 +7,16 @@ from cocotb.triggers import ClockCycles
 
 from tqv import TinyQV
 
+# Tests cover the following scenario.
+# 1) Enabling the watchdog without a timer should result in immediately tripping.
+# 2) Enabling the watchdog with a timer should trigger after the timer.
+# 3) Enabling the watchdog with a timer that is reset should not trigger after the first timer expires.
+# 4) Enabling the watchdog and then disabling the watchdog disables the timer from expiring.
+# 5) TODO: Enabling the watchdog with a WINDOW_START and WINDOW_CLOSE should expire if the pat happens before the window.
+
 @cocotb.test()
 async def test_enabled_without_window(dut):
+    "Enabling the watchdog without a timer should result in immediately tripping."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -39,6 +47,7 @@ async def test_enabled_without_window(dut):
 
 @cocotb.test()
 async def test_enabled_with_window_close_no_start(dut):
+    "Enabling with WINDOW_CLOSE should cause a trigger only after the timer expires."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -64,9 +73,75 @@ async def test_enabled_with_window_close_no_start(dut):
     await ClockCycles(dut.clk, 1)
     assert dut.uo_out.value == 0b1001_1100
 
+@cocotb.test()
+async def test_enabled_with_window_close_and_then_disable_no_trigger(dut):
+    "Enabling with WINDOW_CLOSE and then disabling should cause no trigger."
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    tqv = TinyQV(dut)
+
+    # Reset
+    await tqv.reset()
+    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+
+    # Set a window large enough to survive two spi writes.
+    await tqv.write_word_reg(2, 0x50)
+    # ENABLE watchdog
+    await tqv.write_word_reg(0, 0x1)
+    await ClockCycles(dut.clk, 1)
+
+    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+    assert dut.uo_out.value != 0b1001_1100
+
+    # DISABLE watchdog
+    await tqv.write_word_reg(0, 0x0)
+    await ClockCycles(dut.clk, 1)
+
+    # The interrupt triggers the very next clock cycle
+    await ClockCycles(dut.clk, 100)
+    assert dut.uo_out.value != 0b1001_1100
+
+@cocotb.test()
+async def test_enabled_with_window_close_and_then_pat_no_trigger(dut):
+    "Enabling with WINDOW_CLOSE and then disabling should cause no trigger."
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    tqv = TinyQV(dut)
+
+    # Reset
+    await tqv.reset()
+    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+
+    # Set a window large enough to survive two spi writes.
+    await tqv.write_word_reg(2, 75)
+    # ENABLE watchdog
+    await tqv.write_word_reg(0, 0x1)
+    await ClockCycles(dut.clk, 1)
+
+    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+    assert dut.uo_out.value != 0b1001_1100
+
+    # Send a pat to the watch watchdog
+    await tqv.write_word_reg(3, 0x1)
+    await ClockCycles(dut.clk, 1)
+
+    # The watchdog should not trigger
+    await ClockCycles(dut.clk, 50)
+    assert dut.uo_out.value != 0b1001_1100
+
+
 
 @cocotb.test()
 async def test_enabled_with_window_close_no_start_with_pat_then_expire(dut):
+    "Enabling with only WINDOW_CLOSE and patting causes the timer to reset."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -135,9 +210,9 @@ async def test_enabled_with_window_close_and_start_not_enabled(dut):
     # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
     assert dut.uo_out.value != 0b1001_1100
 
-# Test that enabling the watchdog timer with a WINDOW_CLOSE of results in a set watchdog
 @cocotb.test()
 async def test_enabled_with_window_close_no_pat(dut):
+    "Enabling the watchdog timer with a WINDOW_CLOSE and no pat expires. TODO: rewrite"
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -171,7 +246,7 @@ async def test_enabled_with_window_close_no_pat(dut):
 
 # Test that enabling the watchdog timer with a WINDOW_CLOSE of 10 results in an expired timer in 10 cycles.
 @cocotb.test()
-async def test_enabled_with_window_close2_and_immediate_pat(dut):
+async def test_enabled_with_window_close_and_immediate_pat(dut):
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -258,7 +333,9 @@ async def test_enabled_with_window_start_and_close_early_pat(dut):
     # Enabling watchdog timer
     await tqv.write_word_reg(0, 0x1)
 
-    # immediately patting to reset the timer.
+    # Wait and then pat.
+    await ClockCycles(dut.clk, 10)
+    # patting to reset the timer.
     await tqv.write_word_reg(3, 0x1)
     assert await tqv.read_word_reg(3) == 0x1
 
@@ -267,6 +344,7 @@ async def test_enabled_with_window_start_and_close_early_pat(dut):
     # watchdog should not have tripped after 1 cycle when configured for 0xBBB cycles
     assert dut.uo_out.value != 0b10011100
     assert dut.uo_out.value == 0b01111000
+
 
     # The watchdog should not trigger in less cycles than configured.
     await ClockCycles(dut.clk, 0xAA)

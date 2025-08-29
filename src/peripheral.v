@@ -32,7 +32,7 @@ module tqvp_stevej_watchdog (
 );
 
     reg [31:0] timer;
-    reg [31:0] window_start;
+    reg [31:0] window_open;
     reg [31:0] window_close;
     reg watchdog_enabled; // has the user enabled the design
     reg saw_pat; // destination is an output pin, driving high means the watchdog was pat and reset.
@@ -40,7 +40,7 @@ module tqvp_stevej_watchdog (
 
     always @(posedge clk) begin
         if (!rst_n) begin
-            window_start <= 32'b0;
+            window_open <= 32'b0;
             window_close <= 32'b0;
             watchdog_enabled <= 1'b0;
             saw_pat <= 1'b0;
@@ -48,22 +48,22 @@ module tqvp_stevej_watchdog (
         end else begin
             watchdog_enabled <= watchdog_enabled;
             timer <= timer;
-            window_start <= window_start;
+            window_open <= window_open;
             window_close <= window_close;
             saw_pat <= saw_pat;
 
             if (address == 6'h0) begin // Address 0 is ENABLE
                 if (data_write_n != 2'b11) begin
-                    watchdog_enabled <= 1;
+                    watchdog_enabled <= data_in[0];
                     timer <= 32'b0;
                 end
             end else if (address == 6'h1) begin // Address 1 is WINDOW_START
                 if (data_write_n != 2'b11) begin
-                    window_start <= data_in;
+                    if (!watchdog_enabled) window_open <= data_in;
                 end
             end else if (address == 6'h2) begin // Address 2 is WINDOW_CLOSE
                 if (data_write_n != 2'b11) begin
-                    window_close <= data_in;
+                    if (!watchdog_enabled) window_close <= data_in;
                 end
             end else if (address == 6'h3) begin // Address 3 is PAT
                 if (data_write_n != 2'b11) begin
@@ -77,30 +77,26 @@ module tqvp_stevej_watchdog (
 
             if (watchdog_enabled && !timer_expired) begin
                 timer <= timer + 32'b1;
-            end /* else begin // Why is this else branch cursed?
-                timer <= timer;
-            end */
+            end
         end
     end
-
-    reg [31:0] example_data;
 
     wire interrupt_high; // destination is an output pin, driving high means the window was missed.
     wire interrupt_low; // destination is an output pin, driving low means the window was missed.
 
-    wire after_window_start;
-    assign after_window_start = (timer != 0) && (timer > window_start);
+    wire after_window_open;
+    assign after_window_open = timer > window_open;
 
     wire after_window_close;
-    assign after_window_close = (timer != 0) && (timer > window_close);
+    assign after_window_close = timer > window_close;
 
-    assign timer_expired = watchdog_enabled && after_window_start && after_window_close;
+    assign timer_expired = watchdog_enabled && after_window_open && after_window_close;
 
     assign interrupt_high = timer_expired;
     assign interrupt_low = !timer_expired;
-    assign user_interrupt = interrupt_high;
+    assign user_interrupt = timer_expired;
 
-    assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+    assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_open, after_window_close, 2'b00};
 
     // Addresses
     // 0x0: Enabled
@@ -110,7 +106,7 @@ module tqvp_stevej_watchdog (
     // 0x4: reflects ui_in
     // Default: 0
     assign data_out = (address == 6'h0) ? {31'h0, watchdog_enabled} :
-                      (address == 6'h1) ? window_start :
+                      (address == 6'h1) ? window_open :
                       (address == 6'h2) ? window_close :
                       (address == 6'h3) ? {31'h0, saw_pat} :
                       (address == 6'h4) ? {24'h0, ui_in} :
@@ -123,6 +119,12 @@ module tqvp_stevej_watchdog (
     //reg example_interrupt;
     reg last_ui_in_6;
 
+
+// In the repo of origin for this peripheral, there is a Github Actions
+// workflow for checking the formal properties along with a sby config
+// and script for testing locally.
+//
+// https://github.com/stevej/ttsky25a-rv-watchdog
 `ifdef FORMAL
     logic f_past_valid;
 
@@ -130,6 +132,8 @@ module tqvp_stevej_watchdog (
       f_past_valid = 1'b0;
     end
 
+    // Setup `f_past_valid` so later properties can rely
+    // on the design being out of reset and initialized.
     always @(posedge clk) begin
         if (!f_past_valid) begin
             assume (!rst_n);
@@ -141,15 +145,20 @@ module tqvp_stevej_watchdog (
     always @(posedge clk) begin
         if (f_past_valid) begin
             if (saw_pat) begin
-                assert(watchdog_enabled);
+                //assert(watchdog_enabled);
             end
         end
     end
 
     always @(posedge clk) begin
         if (f_past_valid) begin
-            // the timer should not move if the watchdog isn't enabled
-            if (!watchdog_enabled) assert(timer == 0);
+            // the timer shouldn't move if the watchdog isn't enabled
+            if (!watchdog_enabled) begin
+                assert(timer == 0);
+            end
+            if (timer < window_open) begin
+                assert(!timer_expired);
+            end
         end
     end
 

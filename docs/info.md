@@ -26,19 +26,31 @@ The following registers are used to interact with the watchdog
 | Address | Name    | Access | Description                                                         |
 |---------|---------|--------|---------------------------------------------------------------------|
 | 0x00    | ENABLE  | R/W    | 1 = Enable, 0 = Disable.
-| 0x01    | WINDOW_START | R/W    | 32-bit value for how many cycles after reset the watchdog window should open                    |
+| 0x01    | WINDOW_OPEN | R/W    | 32-bit value for how many cycles after reset the watchdog window should open                    |
 | 0x02    | WINDOW_CLOSE    | R/W      | 32-bit value for how many cycles after reset the watchdog window should close |
 | 0x03    | PAT | R/W   | 1=Pat. 0=Undefined "Patting" the watchdog timer causes it to reset the timer.
 
 
-
 ## How to test
+
+Set `WINDOW_CLOSE` to 100
+Set `ENABLE` to 1
+Wait 101 cycles
+`out[0]` should be high until reset
+`out[1]` should be low until reset
 
 Set WINDOW_CLOSE to 100
 Set ENABLE to 1
-Wait 100 cycles
-out[0] should be high until reset
-out[1] should be low until reset
+Wait 50 cycles
+Set ENABLE to 0
+Wait 51 more cycles
+The watchdog should not have triggered so check `out[0]` and `out[1]`
+`out[0]` should still be low
+`out[1]` should still be high
+
+Notes:
+
+* You can't configure the window open and close while the watchdog is enabled.
 
 ## External hardware
 

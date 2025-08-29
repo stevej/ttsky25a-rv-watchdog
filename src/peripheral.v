@@ -55,7 +55,6 @@ module tqvp_stevej_watchdog (
             if (address == 6'h0) begin // Address 0 is ENABLE
                 if (data_write_n != 2'b11) begin
                     watchdog_enabled <= data_in[0];
-                    timer <= 32'b0;
                 end
             end else if (address == 6'h1) begin // Address 1 is WINDOW_START
                 if (data_write_n != 2'b11) begin

@@ -78,6 +78,11 @@ module tqvp_stevej_watchdog (
             if (watchdog_enabled && !timer_expired) begin
                 timer <= timer + 32'b1;
             end
+
+            // Timer should always be 0 unless the watchdog is running.
+            if (!watchdog_enabled) begin
+                timer <= 32'b0;
+            end
         end
     end
 
@@ -152,8 +157,8 @@ module tqvp_stevej_watchdog (
 
     always @(posedge clk) begin
         if (f_past_valid) begin
-            // the timer shouldn't move if the watchdog isn't enabled
-            if (!watchdog_enabled) begin
+            // the timer shouldn't move once the watchdog is disabled
+            if (!$past(watchdog_enabled)) begin
                 assert(timer == 0);
             end
             if (timer < window_open) begin

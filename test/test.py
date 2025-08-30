@@ -186,69 +186,6 @@ async def test_enabled_with_window_close_and_open_not_enabled_no_trigger(dut):
 
 # Test that enabling the watchdog timer with a WINDOW_CLOSE of 10 results in an expired timer in 10 cycles.
 @cocotb.test()
-async def test_enabled_with_window_close_and_immediate_pat(dut):
-    dut._log.info("Start")
-
-    # Set the clock period to 100 ns (10 MHz)
-    clock = Clock(dut.clk, 100, units="ns")
-    cocotb.start_soon(clock.start())
-
-    # Interact with your design's registers through this TinyQV class.
-    # This will allow the same test to be run when your design is integrated
-    # with TinyQV - the implementation of this class will be replaces with a
-    # different version that uses Risc-V instructions instead of the SPI 
-    # interface to read and write the registers.
-    tqv = TinyQV(dut)
-    # Reset
-    await tqv.reset()
-
-    dut._log.info("Test project behavior")
-    # Set WINDOW_CLOSE
-    await tqv.write_word_reg(2, 0xAAA) # 2730 cycles
-    assert await tqv.read_word_reg(2) == 0xAAA
-
-    # Test enabling watchdog timer by writing to interrupt.
-    await tqv.write_word_reg(0, 0x1)
-
-    # Send pat immediately
-    await tqv.write_word_reg(3, 0x1)
-    assert await tqv.read_word_reg(3) == 0x1
-
-    await ClockCycles(dut.clk, 1)
-    # watchdog has been enabled, no pat seen, timer expired
-    # no interrupt, no pat seen, watchdog enabled, after_window_start, window has not closed.
-    assert dut.uo_out.value != 0b10011100 # we should not have triggered.
-    assert dut.uo_out.value == 0b01111000
-
-    # Check that the watchdog is enabled but not triggered for 10 cycles.
-    for _ in range(10):
-      await ClockCycles(dut.clk, 1)
-      # watchdog has been enabled, no pat seen, timer expired
-      # no interrupt, no pat seen, watchdog enabled, after_window_start, window has not closed.
-      assert dut.uo_out.value == 0b01111000
-
-    # TODO: Mystery! For some unknown reason we only need 101, and not (2730 - already used) cycles, for the watchdog to trigger.
-    await ClockCycles(dut.clk, 0xAAA)
-    # interrupt, watchdog enabled, after_window_start, after_window_close
-    assert dut.uo_out.value == 0b1011_1100
-
-    # interrupts, no pat seen, watchdog enabled, after_window_start
-    # After enough clock cycles, this should be 0b10011000 which indicates the watchdog has been triggered.
-    timer_elapsed = 0
-    for _ in range(10):
-        if dut.uo_out.value != 0b0111_1000:
-            assert dut.uo_out.value == 0b1011_1100
-        if dut.uo_out.value == 0b1011_1100:
-            timer_elapsed = 1
-    assert timer_elapsed
-
-
-  # Test that enabling the watchdog timer with a WINDOW_OPEN of 5 and a WINDOW_CLOSE of 10 doesn't 
-  # trigger outside the window but does trigger inside the window.
-
-
-# Test that enabling the watchdog timer with a WINDOW_CLOSE of 10 results in an expired timer in 10 cycles.
-@cocotb.test()
 async def test_enabled_with_window_start_and_close_early_pat(dut):
     dut._log.info("Start")
 

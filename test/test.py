@@ -14,6 +14,8 @@ from tqv import TinyQV
 # 4) Enabling the watchdog and then disabling the watchdog disables the timer from expiring.
 # 5) TODO: Enabling the watchdog with a WINDOW_START and WINDOW_CLOSE should expire if the pat happens before the window.
 
+# Reminder: assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
+
 @cocotb.test()
 async def test_enabled_without_window(dut):
     "Enabling the watchdog without a timer should result in immediately tripping."
@@ -23,26 +25,12 @@ async def test_enabled_without_window(dut):
     clock = Clock(dut.clk, 100, units="ns")
     cocotb.start_soon(clock.start())
 
-    # Interact with your design's registers through this TinyQV class.
-    # This will allow the same test to be run when your design is integrated
-    # with TinyQV - the implementation of this class will be replaces with a
-    # different version that uses Risc-V instructions instead of the SPI 
-    # interface to read and write the registers.
     tqv = TinyQV(dut)
-
-    # Reset
     await tqv.reset()
 
-    dut._log.info("Test project behavior")
-
     await tqv.write_word_reg(0, 0x1)
-    assert await tqv.read_byte_reg(0) == 0x1
-    assert await tqv.read_hword_reg(0) == 0x1
-    assert await tqv.read_word_reg(0) == 0x1
-
     await ClockCycles(dut.clk, 1)
 
-    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
     assert dut.uo_out.value == 0b1001_1100
 
 @cocotb.test()

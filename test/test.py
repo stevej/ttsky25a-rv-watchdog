@@ -34,7 +34,7 @@ async def test_enabled_without_window(dut):
     assert dut.uo_out.value == 0b1001_1100
 
 @cocotb.test()
-async def test_enabled_with_window_close_no_start(dut):
+async def test_enabled_with_window_close_trigger_after_expiration(dut):
     "Enabling with WINDOW_CLOSE should cause a trigger only after the timer expires."
     dut._log.info("Start")
 
@@ -71,12 +71,10 @@ async def test_enabled_with_window_close_and_then_disable_no_trigger(dut):
     cocotb.start_soon(clock.start())
 
     tqv = TinyQV(dut)
-
-    # Reset
     await tqv.reset()
     dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
 
-    # Set a window large enough to survive two spi writes.
+    # Set a window large enough to last two spi writes.
     await tqv.write_word_reg(2, 0x50)
     # ENABLE watchdog
     await tqv.write_word_reg(0, 0x1)
@@ -89,8 +87,8 @@ async def test_enabled_with_window_close_and_then_disable_no_trigger(dut):
     await tqv.write_word_reg(0, 0x0)
     await ClockCycles(dut.clk, 1)
 
-    # The interrupt triggers the very next clock cycle
-    await ClockCycles(dut.clk, 100)
+    # The interrupt does not trigger, no matter how long we wait
+    await ClockCycles(dut.clk, 1000)
     assert dut.uo_out.value != 0b1001_1100
 
 @cocotb.test()

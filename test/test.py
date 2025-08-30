@@ -160,37 +160,29 @@ async def test_enabled_with_window_close_no_start_with_pat_twice_then_expire(dut
     assert dut.uo_out.value == 0b1011_1100
 
 @cocotb.test()
-async def test_enabled_with_window_close_and_start_not_enabled(dut):
+async def test_enabled_with_window_close_and_open_not_enabled_no_trigger(dut):
+    "Setting WINDOW_OPEN and WINDOW_CLOSE and not enabling it should result in no trigger."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
     clock = Clock(dut.clk, 100, units="ns")
     cocotb.start_soon(clock.start())
 
-    # Interact with your design's registers through this TinyQV class.
-    # This will allow the same test to be run when your design is integrated
-    # with TinyQV - the implementation of this class will be replaces with a
-    # different version that uses Risc-V instructions instead of the SPI 
-    # interface to read and write the registers.
     tqv = TinyQV(dut)
-
-    # Reset
     await tqv.reset()
-
-    dut._log.info("Test project behavior")
+    dut._log.info("Setting WINDOW_OPEN and WINDOW_CLOSE and not enabling it should result in no trigger.")
 
     # WINDOW_START
     await tqv.write_word_reg(1, 25)
     # WINDOW_CLOSE
     await tqv.write_word_reg(2, 50)
-    # ENABLE
-    await tqv.write_word_reg(0, 0x1)
 
     # wait longer than the watchdog is set for to see if it triggers.
-    await ClockCycles(dut.clk, 25)
-
+    await ClockCycles(dut.clk, 35)
     # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
     assert dut.uo_out.value != 0b1001_1100
+    assert dut.uo_out.value == 0b0100_0000
+
 
 @cocotb.test()
 async def test_enabled_with_window_close_no_pat(dut):

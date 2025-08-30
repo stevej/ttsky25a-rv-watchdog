@@ -72,7 +72,7 @@ async def test_enabled_with_window_close_and_then_disable_no_trigger(dut):
 
     tqv = TinyQV(dut)
     await tqv.reset()
-    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+    dut._log.info("Enabling with WINDOW_CLOSE and then disabling should cause no trigger.")
 
     # Set a window large enough to last two spi writes.
     await tqv.write_word_reg(2, 0x50)
@@ -93,7 +93,7 @@ async def test_enabled_with_window_close_and_then_disable_no_trigger(dut):
 
 @cocotb.test()
 async def test_enabled_with_window_close_and_then_pat_no_trigger(dut):
-    "Enabling with WINDOW_CLOSE and then disabling should cause no trigger."
+    "Enabling with WINDOW_CLOSE and then patting should cause no trigger."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -101,28 +101,26 @@ async def test_enabled_with_window_close_and_then_pat_no_trigger(dut):
     cocotb.start_soon(clock.start())
 
     tqv = TinyQV(dut)
-
-    # Reset
     await tqv.reset()
-    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+    dut._log.info("Enabling with WINDOW_CLOSE and then patting should cause no trigger.")
 
     # Set a window large enough to survive two spi writes.
     await tqv.write_word_reg(2, 75)
     # ENABLE watchdog
-    await tqv.write_word_reg(0, 0x1)
+    await tqv.write_word_reg(0, 1)
     await ClockCycles(dut.clk, 1)
 
     # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
     assert dut.uo_out.value != 0b1001_1100
 
     # Send a pat to the watch watchdog
-    await tqv.write_word_reg(3, 0x1)
+    await tqv.write_word_reg(3, 1)
     await ClockCycles(dut.clk, 1)
 
     # The watchdog should not trigger
     await ClockCycles(dut.clk, 50)
     assert dut.uo_out.value != 0b1001_1100
-
+    assert dut.uo_out.value == 0b0111_1000
 
 
 @cocotb.test()

@@ -74,19 +74,22 @@ module tqvp_stevej_watchdog (
                 end
             end
 
+            // timer can only move when the watchdog is on and the timer hasn't expired yet.
             if (watchdog_enabled && !timer_expired) begin
                 timer <= timer + 32'b1;
             end
 
             // Timer should always be 0 unless the watchdog is running.
+            // Also reset saw_pat if the watchdog is disabled.
             if (!watchdog_enabled) begin
+                saw_pat <= 0;
                 timer <= 32'b0;
             end
         end
     end
 
-    wire interrupt_high; // destination is an output pin, driving high means the window was missed.
-    wire interrupt_low; // destination is an output pin, driving low means the window was missed.
+    wire interrupt_high; // driving high means the window was missed.
+    wire interrupt_low; // driving low means the window was missed.
 
     wire after_window_open;
     assign after_window_open = timer > window_open;
@@ -102,7 +105,7 @@ module tqvp_stevej_watchdog (
 
     assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_open, after_window_close, 2'b00};
 
-    // Addresses
+    // Addresses for reads are the same as for writes except 0x4
     // 0x0: Enabled
     // 0x1: WINDOW_OPEN
     // 0x2: WINDOW_CLOSE
@@ -118,17 +121,13 @@ module tqvp_stevej_watchdog (
 
     // All reads complete in 1 clock
     assign data_ready = 1;
-    
-    // User interrupt is generated on rising edge of ui_in[6], and cleared by writing a 1 to the low bit of address 8.
-    //reg example_interrupt;
-    reg last_ui_in_6;
 
-
-// In the repo of origin for this peripheral, there is a Github Actions
+// In the repo of origin for this peripheral, there is a Github Action
 // workflow for checking the formal properties along with a sby config
 // and script for testing locally.
 //
 // https://github.com/stevej/ttsky25a-rv-watchdog
+//
 `ifdef FORMAL
     logic f_past_valid;
 
@@ -148,32 +147,27 @@ module tqvp_stevej_watchdog (
 
     always @(posedge clk) begin
         if (f_past_valid) begin
+            // A pat can't be registered if the watchdog was not enabled.
             if (saw_pat) begin
-                //assert(watchdog_enabled);
+                assert($past(watchdog_enabled));
             end
-        end
-    end
 
-    always @(posedge clk) begin
-        if (f_past_valid) begin
-            // the timer shouldn't move once the watchdog is disabled
+            // the timer shouldn't move once the watchdog is disabled.
             if (!$past(watchdog_enabled)) begin
                 assert(timer == 0);
             end
+
+            // the timer can't expire if the window wasn't open.
             if (timer < window_open) begin
                 assert(!timer_expired);
             end
-        end
-    end
 
-    always @(posedge clk) begin
-        if (f_past_valid) begin
-            // the timer can only expire if the watchdog is enabled
+            // the timer can only expire if the watchdog is enabled.
             if (timer_expired) begin
                 assert (watchdog_enabled);
             end
 
-            // the interrupt can only be pulled high by the timer expiring
+            // the interrupt can only be pulled high by the timer expiring.
             if (interrupt_high) begin
                 assert (timer_expired);
                 assert (watchdog_enabled);

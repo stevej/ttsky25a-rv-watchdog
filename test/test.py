@@ -124,8 +124,8 @@ async def test_enabled_with_window_close_and_then_pat_no_trigger(dut):
 
 
 @cocotb.test()
-async def test_enabled_with_window_close_no_start_with_pat_then_expire(dut):
-    "Enabling with only WINDOW_CLOSE and patting causes the timer to reset."
+async def test_enabled_with_window_close_no_start_with_pat_twice_then_expire(dut):
+    "Enabling with only WINDOW_CLOSE and patting twice causes the timer to reset."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -133,13 +133,11 @@ async def test_enabled_with_window_close_no_start_with_pat_then_expire(dut):
     cocotb.start_soon(clock.start())
 
     tqv = TinyQV(dut)
-
-    # Reset
     await tqv.reset()
-    dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
+    dut._log.info("Enabling with only WINDOW_CLOSE and patting twice causes the timer to reset.")
 
-    # WINDOW_CLOSE is 0x19 (25 decimal) cycles. This is the minimum number of cycles a window can be due to timing.
-    await tqv.write_word_reg(2, 0x19)
+    # WINDOW_CLOSE is 25 cycles. This is the minimum number of cycles a window can be due to timing.
+    await tqv.write_word_reg(2, 25)
     # ENABLE watchdog
     await tqv.write_word_reg(0, 0x1)
     await ClockCycles(dut.clk, 1)
@@ -148,12 +146,12 @@ async def test_enabled_with_window_close_no_start_with_pat_then_expire(dut):
     assert dut.uo_out.value != 0b1001_1100
 
     # Send Pat to reset watchdog, check that the timer hasn't expired.
-    await tqv.write_word_reg(3, 0x1) # how many cycles does this take?
+    await tqv.write_word_reg(3, 1) # how many cycles does this take?
     await ClockCycles(dut.clk, 1)
     assert dut.uo_out.value == 0b0111_1000
 
     # Send Pat again to reset watchdog, check that timer hasn't expired.
-    await tqv.write_word_reg(3, 0x1) # how many cycles does this take?
+    await tqv.write_word_reg(3, 1) # how many cycles does this take?
     await ClockCycles(dut.clk, 1)
     assert dut.uo_out.value == 0b0111_1000
 

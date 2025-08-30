@@ -43,21 +43,21 @@ async def test_enabled_with_window_close_no_start(dut):
     cocotb.start_soon(clock.start())
 
     tqv = TinyQV(dut)
-
-    # Reset
     await tqv.reset()
+
     dut._log.info("Testing a watchdog with a WINDOW_CLOSE but no WINDOW_START")
 
-    # WINDOW_CLOSE is 0x19 (25 decimal) cycles. This is the minimum number of cycles a window can be due to timing.
-    await tqv.write_word_reg(2, 0x19)
+    # WINDOW_CLOSE is set to 25 cycles, the minimum number of cycles a window can be due to timing.
+    # Any shorter than 25 and this test will fail.
+    await tqv.write_word_reg(2, 25)
     # ENABLE watchdog
     await tqv.write_word_reg(0, 0x1)
     await ClockCycles(dut.clk, 1)
 
-    # assign uo_out = {interrupt_high, interrupt_low, saw_pat, watchdog_enabled, after_window_start, after_window_close, 2'b00};
-    assert dut.uo_out.value != 0b1001_1100
+    # After one cycle, no interrupt
+    assert dut.uo_out.value == 0b0101_1000
 
-    # The interrupt triggers the very next clock cycle
+    # Next clock cycle we see the interrupt.
     await ClockCycles(dut.clk, 1)
     assert dut.uo_out.value == 0b1001_1100
 

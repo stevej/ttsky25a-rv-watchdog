@@ -18,7 +18,7 @@ from tqv import TinyQV
 
 @cocotb.test()
 async def test_enabled_without_window(dut):
-    "Enabling the watchdog without a timer should result in immediately tripping."
+    "Enabling the watchdog without a timer should result in an immediate trip."
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -187,6 +187,7 @@ async def test_enabled_with_window_close_and_open_not_enabled_no_trigger(dut):
 # Test that enabling the watchdog timer with a WINDOW_CLOSE of 10 results in an expired timer in 10 cycles.
 @cocotb.test()
 async def test_enabled_with_window_start_and_close_early_pat(dut):
+    "TODO: needed?"
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -238,6 +239,7 @@ async def test_enabled_with_window_start_and_close_early_pat(dut):
 # Test that enabling the watchdog timer with a WINDOW_CLOSE of 10 results in an expired timer in 10 cycles.
 @cocotb.test()
 async def test_enabled_with_window_start_and_close_no_pat(dut):
+    "TODO: needed?"
     dut._log.info("Start")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -277,3 +279,37 @@ async def test_enabled_with_window_start_and_close_no_pat(dut):
     await ClockCycles(dut.clk, 0xAAA)
     assert dut.uo_out.value == 0b10011100
 
+@cocotb.test
+async def test_trigger_followed_by_disable_allows_timer_again(dut):
+    "Once a watchdog triggers, it can be disabled and then enabled again"
+    dut._log.info("Start")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    tqv = TinyQV(dut)
+    await tqv.reset()
+
+    # WINDOW_CLOSE is set to 25 cycles, the minimum number of cycles a window can be due to timing.
+    # Any shorter than 25 and this test will fail.
+    await tqv.write_word_reg(2, 25)
+    # ENABLE watchdog
+    await tqv.write_word_reg(0, 0x1)
+    await ClockCycles(dut.clk, 1)
+
+    # After one cycle, no interrupt
+    assert dut.uo_out.value == 0b0101_1000
+
+    # Next clock cycle we see the interrupt.
+    await ClockCycles(dut.clk, 1)
+    assert dut.uo_out.value == 0b1001_1100
+
+    # Turn ENABLE to off, watchdog is no longer tripping.
+    await tqv.write_word_reg(0, 0)
+    await ClockCycles(dut.clk, 1)
+    assert dut.uo_out.value == 0b0100_0000
+
+    # Enable watchdog again and watch it trip.
+    await tqv.write_word_reg(0, 1)
+    assert dut.uo_out.value == 0b0101_1000

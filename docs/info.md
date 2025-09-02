@@ -11,13 +11,21 @@ You can also include images in this folder and reference them in the markdown. E
 
 This is a watchdog timer with a 32-bit counter and optional window feature.
 
-WINDOW_CLOSE is how many cycles until the watchdog timer pulls the output interrupt high either low or high respectively. WINDOW_OPEN < WINDOW_CLOSE. WINDOW_OPEN can be 0.
+WINDOW_CLOSE is how many cycles until the watchdog timer triggers an interrupt.
+WINDOW_OPEN must be less than WINDOW_CLOSE. WINDOW_OPEN can be 0.
 
-Remember to ENABLE the timer after setting WINDOW_CLOSE if you want the watchdog to start working.
+Remember to ENABLE the timer after setting WINDOW_CLOSE if you want the watchdog to start.
 
-out[0] is an interrupt line pulled high 
-out[1] is an interrupt line pulled low
-out[2] is a line pulled high for 1 cycle when PAT is set 1
+You can cancel a timer by setting ENABLE to 0. This can be done either before or after the timer has tripped.
+
+`out[0]` is an interrupt line pulled high
+`out[1]` is an interrupt line pulled low
+`out[2]` is a line pulled high for 1 cycle when PAT is set 1
+`out[3]` is high if the watchdog is enabled
+`out[4]` is high if we're after the Start time of the window.
+`out[5]` is high if we're after the End time of the window.
+`out[6]` is unused
+`out[7]` is unused
 
 ## Register map
 
@@ -36,8 +44,8 @@ The following registers are used to interact with the watchdog
 Set `WINDOW_CLOSE` to 100
 Set `ENABLE` to 1
 Wait 101 cycles
-`out[0]` should be high until reset
-`out[1]` should be low until reset
+`out[0]` should be high
+`out[1]` should be low
 
 Set WINDOW_CLOSE to 100
 Set ENABLE to 1
@@ -50,7 +58,7 @@ The watchdog should not have triggered so check `out[0]` and `out[1]`
 
 Notes:
 
-* You can't configure the window open and close while the watchdog is enabled.
+You can set `WINDOW_OPEN` and `WINDOW_CLOSE` while the timer is running but that's untested and thus could result in a rip in the space time continuum. Set `ENABLE` to 0 first to safely change the window parameters with predictable behavior.
 
 ## External hardware
 

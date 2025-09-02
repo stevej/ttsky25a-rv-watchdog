@@ -56,7 +56,7 @@ module tqvp_stevej_watchdog (
                 if (data_write_n != 2'b11) begin
                     watchdog_enabled <= data_in[0];
                 end
-            end else if (address == 6'h1) begin // Address 1 is WINDOW_START
+            end else if (address == 6'h1) begin // Address 1 is WINDOW_OPEN
                 if (data_write_n != 2'b11) begin
                     if (!watchdog_enabled) window_open <= data_in;
                 end

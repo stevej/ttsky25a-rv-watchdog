@@ -14,7 +14,7 @@ This is a watchdog timer with a 32-bit counter and optional window feature. A wa
 An example: If you're expecting your watchdog pat task to run every 1 million cycles with a standard deviation of 10%, you can set a `WINDOW_OPEN` time of 800,000 cycles and an `WINDOW_CLOSE` time of 1.2 million cycles and feel confident that the watchdog pats are happening when you're expecting them to.
 
 `WINDOW_CLOSE` is how many cycles until the watchdog timer triggers an interrupt.
-`WINDOW_OPEN` is how long the watchdog waits before allowing a pat to be registered. Must be less than WINDOW_CLOSE because I don't know what your intention would be like otherwise. WINDOW_OPEN can be 0.
+`WINDOW_OPEN` is how long the watchdog waits before allowing a pat to be registered. Must be less than WINDOW_CLOSE. WINDOW_OPEN can be 0.
 
 Remember to ENABLE the timer after setting WINDOW_CLOSE if you want the watchdog to start.
 
